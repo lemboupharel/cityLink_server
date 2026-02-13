@@ -1,0 +1,285 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER MANAGEMENT
+// ============================================
+
+enum Role {
+  CITIZEN
+  COLLECTOR
+  AGENCY
+  MUNICIPAL
+}
+
+model User {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  password  String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  profile              Profile?
+  wasteDeclarations    WasteDeclaration[]
+  collections          Collection[]
+  agencyConfirmations  AgencyConfirmation[]
+  wallet               Wallet?
+  payouts              Payout[]
+  dumpReports          DumpReport[]
+  dumpVerifications    DumpVerification[]
+  reputationScore      ReputationScore?
+  reportFlags          ReportFlag[]
+
+  @@map("users")
+}
+
+model Profile {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName String?
+  lastName  String?
+  address   String?
+  city      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("profiles")
+}
+
+// ============================================
+// RECYCLING MODULE (MONEY PATH)
+// ============================================
+
+enum WasteType {
+  PET       // PET bottles
+  ALUMINUM  // Aluminum/metal
+  HDPE      // Clean HDPE
+}
+
+enum DeclarationStatus {
+  PENDING
+  PICKED_UP
+  VALIDATED
+  COMPLETED
+}
+
+model WasteDeclaration {
+  id          String            @id @default(uuid())
+  citizenId   String
+  citizen     User              @relation(fields: [citizenId], references: [id])
+  wasteType   WasteType
+  estimatedKg Float
+  description String?
+  latitude    Float
+  longitude   Float
+  status      DeclarationStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  collection          Collection?
+  agencyConfirmation  AgencyConfirmation?
+  recyclingTransaction RecyclingTransaction?
+
+  @@index([citizenId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("waste_declarations")
+}
+
+model Collection {
+  id          String   @id @default(uuid())
+  declarationId String @unique
+  declaration WasteDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  collectorId String
+  collector   User     @relation(fields: [collectorId], references: [id])
+  pickedUpAt  DateTime @default(now())
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([collectorId])
+  @@map("collections")
+}
+
+model AgencyConfirmation {
+  id            String   @id @default(uuid())
+  declarationId String   @unique
+  declaration   WasteDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  agencyId      String
+  agency        User     @relation(fields: [agencyId], references: [id])
+  confirmedKg   Float
+  pricePerKg    Float
+  totalValue    Float
+  confirmedAt   DateTime @default(now())
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([agencyId])
+  @@map("agency_confirmations")
+}
+
+model RecyclingTransaction {
+  id               String   @id @default(uuid())
+  declarationId    String   @unique
+  declaration      WasteDeclaration @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  totalAmount      Float
+  collectorAmount  Float
+  citizenAmount    Float
+  citylinkAmount   Float
+  createdAt        DateTime @default(now())
+
+  @@map("recycling_transactions")
+}
+
+model Wallet {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  balance   Float    @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("wallets")
+}
+
+enum PayoutStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  FAILED
+}
+
+model Payout {
+  id         String       @id @default(uuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id])
+  amount     Float
+  status     PayoutStatus @default(PENDING)
+  momoNumber String?
+  reference  String?
+  requestedAt DateTime    @default(now())
+  processedAt DateTime?
+  notes      String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("payouts")
+}
+
+// ============================================
+// DUMP REPORTING MODULE (DATA PATH)
+// ============================================
+
+enum DumpSize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum DumpStatus {
+  UNVERIFIED
+  VERIFIED
+  CLEANED
+}
+
+model DumpReport {
+  id          String     @id @default(uuid())
+  reporterId  String
+  reporter    User       @relation(fields: [reporterId], references: [id])
+  latitude    Float
+  longitude   Float
+  photoUrl    String     // Base64 or file path
+  photoHash   String     @unique
+  size        DumpSize
+  description String?
+  status      DumpStatus @default(UNVERIFIED)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  verifications DumpVerification[]
+  flags         ReportFlag[]
+
+  @@index([reporterId])
+  @@index([status])
+  @@index([latitude, longitude])
+  @@index([createdAt])
+  @@map("dump_reports")
+}
+
+model DumpVerification {
+  id         String     @id @default(uuid())
+  dumpReportId String
+  dumpReport DumpReport @relation(fields: [dumpReportId], references: [id], onDelete: Cascade)
+  verifierId String
+  verifier   User       @relation(fields: [verifierId], references: [id])
+  verifiedAt DateTime   @default(now())
+
+  @@unique([dumpReportId, verifierId])
+  @@index([dumpReportId])
+  @@map("dump_verifications")
+}
+
+model ReputationScore {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  score            Int      @default(0)
+  verifiedReports  Int      @default(0)
+  falseReports     Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("reputation_scores")
+}
+
+// ============================================
+// ANTI-FRAUD
+// ============================================
+
+model PhotoHash {
+  id        String   @id @default(uuid())
+  hash      String   @unique
+  uploadedBy String
+  createdAt DateTime @default(now())
+
+  @@index([hash])
+  @@map("photo_hashes")
+}
+
+enum FlagReason {
+  DUPLICATE_PHOTO
+  FAKE_LOCATION
+  SPAM
+  OTHER
+}
+
+model ReportFlag {
+  id           String     @id @default(uuid())
+  dumpReportId String
+  dumpReport   DumpReport @relation(fields: [dumpReportId], references: [id], onDelete: Cascade)
+  flaggedById  String
+  flaggedBy    User       @relation(fields: [flaggedById], references: [id])
+  reason       FlagReason
+  notes        String?
+  createdAt    DateTime   @default(now())
+
+  @@index([dumpReportId])
+  @@map("report_flags")
+}

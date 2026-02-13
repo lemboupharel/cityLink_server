@@ -1,0 +1,479 @@
+###############################################################################
+# CityLink 2.1 Backend - Complete API Test Suite
+# 
+# Instructions:
+# 1. Install REST Client extension in VS Code
+# 2. Update the @baseUrl if needed
+# 3. Run requests sequentially by clicking "Send Request"
+# 4. Tokens are automatically captured and reused
+###############################################################################
+
+@baseUrl = http://localhost:3000/api
+@contentType = application/json
+
+###############################################################################
+# 1. AUTHENTICATION TESTS
+###############################################################################
+
+### Health Check
+GET {{baseUrl}}/../api/health
+
+### 1.1 Register CITIZEN
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345001",
+  "password": "citizen123",
+  "role": "CITIZEN",
+  "firstName": "Alice",
+  "lastName": "Citizen"
+}
+
+### 1.2 Register COLLECTOR
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345002",
+  "password": "collector123",
+  "role": "COLLECTOR",
+  "firstName": "Bob",
+  "lastName": "Collector"
+}
+
+### 1.3 Register AGENCY
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345003",
+  "password": "agency123",
+  "role": "AGENCY",
+  "firstName": "Charlie",
+  "lastName": "Agency"
+}
+
+### 1.4 Register MUNICIPAL
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345004",
+  "password": "municipal123",
+  "role": "MUNICIPAL",
+  "firstName": "Diana",
+  "lastName": "Municipal"
+}
+
+### 1.5 Register Second CITIZEN (for dump verification testing)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345005",
+  "password": "citizen456",
+  "role": "CITIZEN",
+  "firstName": "Eve",
+  "lastName": "Citizen2"
+}
+
+### 1.6 Login as CITIZEN
+# @name loginCitizen
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345001",
+  "password": "citizen123"
+}
+
+@citizenToken = {{loginCitizen.response.body.token}}
+
+### 1.7 Login as COLLECTOR
+# @name loginCollector
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345002",
+  "password": "collector123"
+}
+
+@collectorToken = {{loginCollector.response.body.token}}
+
+### 1.8 Login as AGENCY
+# @name loginAgency
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345003",
+  "password": "agency123"
+}
+
+@agencyToken = {{loginAgency.response.body.token}}
+
+### 1.9 Login as MUNICIPAL
+# @name loginMunicipal
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345004",
+  "password": "municipal123"
+}
+
+@municipalToken = {{loginMunicipal.response.body.token}}
+
+### 1.10 Login as Second CITIZEN
+# @name loginCitizen2
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345005",
+  "password": "citizen456"
+}
+
+@citizen2Token = {{loginCitizen2.response.body.token}}
+
+### 1.11 Get Current User (CITIZEN)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{citizenToken}}
+
+###############################################################################
+# 2. RECYCLING MODULE TESTS (MONEY PATH)
+###############################################################################
+
+### 2.1 Citizen Declares PET Waste
+# @name declarePET
+POST {{baseUrl}}/recycling/declare
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "wasteType": "PET",
+  "estimatedKg": 5.5,
+  "latitude": 3.8480,
+  "longitude": 11.5021,
+  "description": "5 large PET bottles from household"
+}
+
+@declarationId = {{declarePET.response.body.declaration.id}}
+
+### 2.2 Citizen Declares ALUMINUM Waste
+POST {{baseUrl}}/recycling/declare
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "wasteType": "ALUMINUM",
+  "estimatedKg": 2.0,
+  "latitude": 3.8485,
+  "longitude": 11.5025,
+  "description": "Aluminum cans collection"
+}
+
+### 2.3 Citizen Declares HDPE Waste
+POST {{baseUrl}}/recycling/declare
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "wasteType": "HDPE",
+  "estimatedKg": 3.2,
+  "latitude": 3.8490,
+  "longitude": 11.5030,
+  "description": "Clean HDPE plastic containers"
+}
+
+### 2.4 Get All Declarations (CITIZEN view - only their own)
+GET {{baseUrl}}/recycling/declarations
+Authorization: Bearer {{citizenToken}}
+
+### 2.5 Get PENDING Declarations (COLLECTOR view - all pending)
+GET {{baseUrl}}/recycling/declarations?status=PENDING
+Authorization: Bearer {{collectorToken}}
+
+### 2.6 Collector Confirms Pickup
+POST {{baseUrl}}/recycling/pickup/{{declarationId}}
+Authorization: Bearer {{collectorToken}}
+Content-Type: {{contentType}}
+
+{
+  "notes": "Picked up at 10:30 AM, waste in good condition"
+}
+
+### 2.7 Agency Validates Weight and Creates Transaction
+POST {{baseUrl}}/recycling/validate/{{declarationId}}
+Authorization: Bearer {{agencyToken}}
+Content-Type: {{contentType}}
+
+{
+  "confirmedKg": 5.2,
+  "notes": "Weight confirmed, PET bottles verified"
+}
+
+### 2.8 Get Citizen Wallet (should show balance after validation)
+GET {{baseUrl}}/recycling/wallet
+Authorization: Bearer {{citizenToken}}
+
+### 2.9 Get Collector Wallet (should show balance after validation)
+GET {{baseUrl}}/recycling/wallet
+Authorization: Bearer {{collectorToken}}
+
+### 2.10 Get Recycling Transactions (CITIZEN)
+GET {{baseUrl}}/recycling/transactions
+Authorization: Bearer {{citizenToken}}
+
+### 2.11 Get Recycling Transactions (COLLECTOR)
+GET {{baseUrl}}/recycling/transactions
+Authorization: Bearer {{collectorToken}}
+
+###############################################################################
+# 3. ROLE-BASED ACCESS CONTROL TESTS (RECYCLING)
+###############################################################################
+
+### 3.1 COLLECTOR Tries to Declare Waste (Should Fail - 403)
+POST {{baseUrl}}/recycling/declare
+Authorization: Bearer {{collectorToken}}
+Content-Type: {{contentType}}
+
+{
+  "wasteType": "PET",
+  "estimatedKg": 1.0,
+  "latitude": 3.8480,
+  "longitude": 11.5021
+}
+
+### 3.2 CITIZEN Tries to Validate Weight (Should Fail - 403)
+POST {{baseUrl}}/recycling/validate/{{declarationId}}
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "confirmedKg": 5.0
+}
+
+### 3.3 AGENCY Tries to Pickup (Should Fail - 403)
+POST {{baseUrl}}/recycling/pickup/{{declarationId}}
+Authorization: Bearer {{agencyToken}}
+Content-Type: {{contentType}}
+
+{
+  "notes": "Test"
+}
+
+###############################################################################
+# 4. DUMP REPORTING MODULE TESTS (DATA PATH)
+###############################################################################
+
+### 4.1 Citizen 1 Reports Dump (First Report - UNVERIFIED)
+# @name reportDump1
+POST {{baseUrl}}/dumps/report
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "latitude": 3.8500,
+  "longitude": 11.5040,
+  "photoBase64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlbaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q==",
+  "size": "MEDIUM",
+  "description": "Roadside dump near market area"
+}
+
+@dumpId = {{reportDump1.response.body.report.id}}
+
+### 4.2 Citizen 2 Reports Same Dump (Within 100m - Should VERIFY both)
+# @name reportDump2
+POST {{baseUrl}}/dumps/report
+Authorization: Bearer {{citizen2Token}}
+Content-Type: {{contentType}}
+
+{
+  "latitude": 3.8501,
+  "longitude": 11.5041,
+  "photoBase64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/2wBDAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQH/wAARCAABAAEDAREAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AJUAH//Z",
+  "size": "LARGE",
+  "description": "Same dump, slightly different angle"
+}
+
+### 4.3 Get All Dumps
+GET {{baseUrl}}/dumps
+Authorization: Bearer {{citizenToken}}
+
+### 4.4 Get VERIFIED Dumps Only
+GET {{baseUrl}}/dumps?status=VERIFIED
+Authorization: Bearer {{citizenToken}}
+
+### 4.5 Get My Reports Only
+GET {{baseUrl}}/dumps?myReports=true
+Authorization: Bearer {{citizenToken}}
+
+### 4.6 Get Single Dump with Full Details (including photo)
+GET {{baseUrl}}/dumps/{{dumpId}}
+Authorization: Bearer {{citizenToken}}
+
+### 4.7 Get Citizen 1 Reputation (should have points from verified dump)
+GET {{baseUrl}}/dumps/user/reputation
+Authorization: Bearer {{citizenToken}}
+
+### 4.8 Get Citizen 2 Reputation (should have points from verified dump)
+GET {{baseUrl}}/dumps/user/reputation
+Authorization: Bearer {{citizen2Token}}
+
+### 4.9 Try to Reuse Photo (Should Fail - Photo Hash Exists)
+POST {{baseUrl}}/dumps/report
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "latitude": 3.8600,
+  "longitude": 11.5100,
+  "photoBase64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlbaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD3+iiigD//2Q==",
+  "size": "SMALL"
+}
+
+### 4.10 Collector Reports Dump
+POST {{baseUrl}}/dumps/report
+Authorization: Bearer {{collectorToken}}
+Content-Type: {{contentType}}
+
+{
+  "latitude": 3.8520,
+  "longitude": 11.5050,
+  "photoBase64": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+  "size": "SMALL",
+  "description": "Small dump on collector route"
+}
+
+###############################################################################
+# 5. MUNICIPAL DASHBOARD TESTS (READ-ONLY)
+###############################################################################
+
+### 5.1 Get Heatmap Data
+GET {{baseUrl}}/municipal/heatmap
+Authorization: Bearer {{municipalToken}}
+
+### 5.2 Get Heatmap with Date Filter
+GET {{baseUrl}}/municipal/heatmap?startDate=2026-01-01&endDate=2026-12-31
+Authorization: Bearer {{municipalToken}}
+
+### 5.3 Get Dump Density Analytics
+GET {{baseUrl}}/municipal/density
+Authorization: Bearer {{municipalToken}}
+
+### 5.4 Get Dump Density with Custom Grid Size
+GET {{baseUrl}}/municipal/density?gridSize=0.005
+Authorization: Bearer {{municipalToken}}
+
+### 5.5 Get All Verified Dumps
+GET {{baseUrl}}/municipal/dumps
+Authorization: Bearer {{municipalToken}}
+
+### 5.6 Get Verified Dumps Filtered by Size
+GET {{baseUrl}}/municipal/dumps?size=LARGE
+Authorization: Bearer {{municipalToken}}
+
+### 5.7 Get Verified Dumps with Date Range
+GET {{baseUrl}}/municipal/dumps?startDate=2026-02-01&endDate=2026-02-28
+Authorization: Bearer {{municipalToken}}
+
+###############################################################################
+# 6. ROLE-BASED ACCESS CONTROL TESTS (MUNICIPAL)
+###############################################################################
+
+### 6.1 CITIZEN Tries to Access Heatmap (Should Fail - 403)
+GET {{baseUrl}}/municipal/heatmap
+Authorization: Bearer {{citizenToken}}
+
+### 6.2 COLLECTOR Tries to Access Density (Should Fail - 403)
+GET {{baseUrl}}/municipal/density
+Authorization: Bearer {{collectorToken}}
+
+### 6.3 AGENCY Tries to Access Municipal Dumps (Should Fail - 403)
+GET {{baseUrl}}/municipal/dumps
+Authorization: Bearer {{agencyToken}}
+
+###############################################################################
+# 7. ERROR HANDLING TESTS
+###############################################################################
+
+### 7.1 Register with Existing Phone (Should Fail - 400)
+POST {{baseUrl}}/auth/register
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345001",
+  "password": "test123",
+  "role": "CITIZEN"
+}
+
+### 7.2 Login with Wrong Password (Should Fail - 401)
+POST {{baseUrl}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "phone": "237612345001",
+  "password": "wrongpassword"
+}
+
+### 7.3 Access Protected Route Without Token (Should Fail - 401)
+GET {{baseUrl}}/recycling/declarations
+
+### 7.4 Declare Waste with Invalid Type (Should Fail - 400)
+POST {{baseUrl}}/recycling/declare
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "wasteType": "ORGANIC",
+  "estimatedKg": 5.0,
+  "latitude": 3.8480,
+  "longitude": 11.5021
+}
+
+### 7.5 Pickup Non-Existent Declaration (Should Fail - 404)
+POST {{baseUrl}}/recycling/pickup/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{collectorToken}}
+Content-Type: {{contentType}}
+
+{
+  "notes": "Test"
+}
+
+### 7.6 Report Dump with Invalid Coordinates (Should Fail - 400)
+POST {{baseUrl}}/dumps/report
+Authorization: Bearer {{citizenToken}}
+Content-Type: {{contentType}}
+
+{
+  "latitude": 200,
+  "longitude": 500,
+  "photoBase64": "invalid",
+  "size": "MEDIUM"
+}
+
+###############################################################################
+# 8. MODULE SEPARATION VERIFICATION
+###############################################################################
+
+### 8.1 Verify NO Wallet for Dump Reporters
+# Get citizen wallet (should only show recycling balance, not dump points)
+GET {{baseUrl}}/recycling/wallet
+Authorization: Bearer {{citizenToken}}
+
+### 8.2 Verify Reputation is Separate
+# Get reputation (should show dump reporting score, not money)
+GET {{baseUrl}}/dumps/user/reputation
+Authorization: Bearer {{citizenToken}}
+
+### 8.3 Verify Transactions are Recycling Only
+# Should only show recycling transactions, not dump reports
+GET {{baseUrl}}/recycling/transactions
+Authorization: Bearer {{citizenToken}}
+
+###############################################################################
+# END OF TESTS
+###############################################################################
